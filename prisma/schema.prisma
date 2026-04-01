@@ -1,0 +1,474 @@
+//prisma/schema.prisma 
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum Role {
+  PATIENT
+  PROVIDER
+  ADMIN
+}
+
+enum ProviderStatus {
+  PENDING
+  VERIFIED
+  REJECTED
+  SUSPENDED
+}
+
+enum AppointmentStatus {
+  PENDING
+  CONFIRMED
+  CANCELLED
+  COMPLETED
+  NO_SHOW
+}
+
+enum NotificationChannel {
+  EMAIL
+  SMS
+  PUSH
+}
+
+enum NotificationStatus {
+  QUEUED
+  SENT
+  FAILED
+}
+
+enum DayOfWeek {
+  MONDAY
+  TUESDAY
+  WEDNESDAY
+  THURSDAY
+  FRIDAY
+  SATURDAY
+  SUNDAY
+}
+
+model User {
+  paymentsNew Payment[]
+  id           Int      @id @default(autoincrement())
+  name         String
+  email        String   @unique
+  password     String
+  role         Role     @default(PATIENT)
+  refreshToken String?
+  createdAt    DateTime @default(now())
+  passwordResetToken       String?
+  passwordResetTokenExpiry DateTime?
+
+  appointments         Appointment[]
+  payments             AppointmentPayment[]
+  provider             Provider?
+  patientInsurance     PatientInsurance?
+  reviews              Review[]
+  waitlist             Waitlist[]
+  notificationLogs     NotificationLog[]
+  analyticsLogs        AnalyticsLog[]
+  appointmentAuditLogs AppointmentAuditLog[]
+  googleEvents         GoogleEvent[]
+}
+
+model Provider {
+  id              Int      @id @default(autoincrement())
+  userId          Int      @unique
+  user            User     @relation(fields: [userId], references: [id])
+
+  displayName     String
+  specialty       String
+  bio             String?
+  photoUrl        String?
+  specializations String[]
+
+  latitude        Float?
+  longitude       Float?
+
+  // 🔒 PROVIDER VERIFICATION
+  status          ProviderStatus @default(PENDING)
+  verifiedAt      DateTime?
+  verifiedByAdmin Int?
+
+  // ⭐ RATINGS
+  ratingAverage   Float?   @default(0)
+  ratingCount     Int      @default(0)
+
+  // 🔑 GOOGLE OAUTH
+  googleAccessToken  String?
+  googleRefreshToken String?
+  tokenExpiry        DateTime?
+
+  // 🧩 RELATIONS
+  locations                 ProviderLocation[]
+  appointmentSlots          AppointmentSlot[]
+  appointments              Appointment[]
+  procedures                Procedure[]
+  availability              AvailabilitySchedule[]
+  availabilityExceptions    AvailabilityException[]
+  insurancesAccepted        ProviderInsurance[]
+  reviews                   Review[]
+  waitlist                  Waitlist[]
+  providerScheduleTemplates ProviderScheduleTemplate[]
+  googleEvents              GoogleEvent[]
+  googleSyncAuditLogs        GoogleSyncAuditLog[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+model ProviderLocation {
+  id         Int      @id @default(autoincrement())
+  providerId Int
+  name       String // "Downtown Clinic"
+  address1   String
+  address2   String?
+  city       String
+  postcode   String
+  latitude   Float
+  longitude  Float
+  phone      String?
+  createdAt  DateTime @default(now())
+
+  provider Provider @relation(fields: [providerId], references: [id])
+}
+
+model Procedure {
+  id           Int           @id @default(autoincrement())
+  name         String
+  description  String?
+  price        Float
+  providerId   Int
+  provider     Provider      @relation(fields: [providerId], references: [id])
+  appointments Appointment[]
+  createdAt    DateTime      @default(now())
+
+  @@unique([name, providerId])
+}
+
+model AvailabilitySchedule {
+  id         Int      @id @default(autoincrement())
+  providerId Int
+  dayOfWeek  Int // 0–6 (Sun → Sat)
+  startTime  String // "09:00"
+  endTime    String // "17:00"
+  slotSize   Int // minutes e.g., 15 or 30
+  provider   Provider @relation(fields: [providerId], references: [id])
+
+  @@index([providerId])
+}
+
+model AvailabilityException {
+  id          Int      @id @default(autoincrement())
+  providerId  Int
+
+  date        DateTime // normalized to local day start
+  isAvailable Boolean  @default(false) // false = block, true = open override
+
+  start       DateTime?
+  end         DateTime?
+
+  reason      String?
+  createdAt   DateTime @default(now())
+
+  provider Provider @relation(fields: [providerId], references: [id])
+
+  @@index([providerId, date])
+}
+
+model AppointmentSlot {
+  id         Int      @id @default(autoincrement())
+  providerId Int
+  start      DateTime
+  end        DateTime
+  booked     Boolean  @default(false)
+  title      String?
+  createdAt  DateTime @default(now())
+
+  provider Provider @relation(fields: [providerId], references: [id])
+
+  // A slot can exist unbooked, so it may have no appointment
+  appointment Appointment? @relation("AppointmentSlotToAppointment")
+
+  @@unique([providerId, start])
+}
+
+model Appointment {
+  payment   Payment?
+  id          Int  @id @default(autoincrement())
+  userId      Int
+  providerId  Int
+  procedureId Int?
+
+  // ✅ REQUIRED: every appointment must be backed by a slot
+  slotId      Int @unique
+
+  title       String
+  date        DateTime
+  status      AppointmentStatus @default(PENDING)
+  notes       String?
+  location    String?
+  duration    Int?
+  latitude    Float?
+  longitude   Float?
+  paymentType String?
+  createdAt   DateTime          @default(now())
+  updatedAt   DateTime          @updatedAt
+  cancelledAt DateTime?
+
+  user      User             @relation(fields: [userId], references: [id])
+  provider  Provider         @relation(fields: [providerId], references: [id])
+  procedure Procedure?       @relation(fields: [procedureId], references: [id])
+
+  // ✅ REQUIRED relation
+  slot      AppointmentSlot  @relation("AppointmentSlotToAppointment", fields: [slotId], references: [id])
+
+  payments  AppointmentPayment[]
+  auditLogs AppointmentAuditLog[]
+
+  reminder24Sent Boolean @default(false)
+  reminder1hSent Boolean @default(false)
+}
+
+model AppointmentPayment {
+  id            Int      @id @default(autoincrement())
+  appointmentId Int
+  userId        Int
+  amount        Float
+  paymentType   String
+  status        String
+  createdAt     DateTime @default(now())
+
+  appointment Appointment @relation(fields: [appointmentId], references: [id])
+  user        User        @relation(fields: [userId], references: [id])
+}
+
+model AppointmentAuditLog {
+  id            Int      @id @default(autoincrement())
+  appointmentId Int
+  userId        Int?
+  action        String
+  oldValue      String?
+  newValue      String?
+  createdAt     DateTime @default(now())
+
+  appointment Appointment @relation(fields: [appointmentId], references: [id])
+  user        User?       @relation(fields: [userId], references: [id])
+}
+
+model GoogleSyncAuditLog {
+  id         Int      @id @default(autoincrement())
+  providerId Int
+  action     String // DISABLED | RE_ENABLED
+  reason     String?
+  actorRole  String // SYSTEM | ADMIN
+  createdAt  DateTime @default(now())
+
+  provider Provider @relation(fields: [providerId], references: [id])
+
+  @@index([providerId])
+}
+
+model InsuranceProvider {
+  id        Int      @id @default(autoincrement())
+  name      String
+  country   String?
+  createdAt DateTime @default(now())
+
+  plans InsurancePlan[]
+}
+
+model InsurancePlan {
+  id          Int      @id @default(autoincrement())
+  providerId  Int
+  name        String // "Gold Plan", "PPO Plus"
+  description String?
+  createdAt   DateTime @default(now())
+
+  insuranceProvider InsuranceProvider   @relation(fields: [providerId], references: [id])
+  acceptedBy        ProviderInsurance[]
+  heldByPatients    PatientInsurance[]
+}
+
+model ProviderInsurance {
+  id         Int @id @default(autoincrement())
+  providerId Int
+  planId     Int
+
+  provider Provider      @relation(fields: [providerId], references: [id])
+  plan     InsurancePlan @relation(fields: [planId], references: [id])
+
+  @@unique([providerId, planId])
+}
+
+model PatientInsurance {
+  id         Int       @id @default(autoincrement())
+  userId     Int       @unique
+  planId     Int
+  memberId   String?
+  validUntil DateTime?
+
+  user User          @relation(fields: [userId], references: [id])
+  plan InsurancePlan @relation(fields: [planId], references: [id])
+}
+
+model Review {
+  id         Int      @id @default(autoincrement())
+  userId     Int
+  providerId Int
+  rating     Int // 1–5
+  review     String?
+  createdAt  DateTime @default(now())
+
+  user     User     @relation(fields: [userId], references: [id])
+  provider Provider @relation(fields: [providerId], references: [id])
+
+  @@unique([userId, providerId])
+}
+
+model Waitlist {
+  id         Int      @id @default(autoincrement())
+  userId     Int
+  providerId Int
+  date       DateTime
+  createdAt  DateTime @default(now())
+
+  user     User     @relation(fields: [userId], references: [id])
+  provider Provider @relation(fields: [providerId], references: [id])
+}
+
+model NotificationLog {
+  id        Int                 @id @default(autoincrement())
+  userId    Int?
+  channel   NotificationChannel
+  status    NotificationStatus
+  message   String?
+  createdAt DateTime            @default(now())
+
+  user User? @relation(fields: [userId], references: [id])
+}
+
+model GoogleEvent {
+  id         Int    @id @default(autoincrement())
+  eventId    String
+  providerId Int
+  userId     Int
+
+  summary     String
+  description String?
+  location    String?
+  startTime   DateTime?
+  endTime     DateTime?
+  status      String?
+  updatedAt   DateTime  @default(now())
+
+  provider Provider @relation(fields: [providerId], references: [id], onDelete: Cascade)
+  user     User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([eventId, providerId])
+  @@map("google_events")
+}
+
+model ChatMessage {
+  id        Int      @id @default(autoincrement())
+  sender    String
+  message   String
+  createdAt DateTime @default(now())
+}
+
+model AnalyticsLog {
+  id        Int      @id @default(autoincrement())
+  userId    Int?
+  event     String
+  meta      Json?
+  createdAt DateTime @default(now())
+
+  user User? @relation(fields: [userId], references: [id])
+}
+
+model ProviderScheduleTemplate {
+  id         Int      @id @default(autoincrement())
+  providerId Int
+  dayOfWeek  Int // 0 = Monday, 6 = Sunday
+  startTime  String // HH:mm
+  endTime    String // HH:mm
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+
+  provider Provider @relation(fields: [providerId], references: [id])
+
+  @@unique([providerId, dayOfWeek, startTime, endTime])
+}
+
+// ===============================
+// PHASE 2 — PAYMENTS (FOUNDATION)
+// ===============================
+
+enum PaymentStatus {
+  PENDING
+  CONFIRMED
+  FAILED
+  REFUNDED
+  PARTIALLY_REFUNDED
+}
+
+enum PaymentAuditAction {
+  CREATED
+  CONFIRMED
+  FAILED
+  REFUNDED
+  PARTIAL_REFUND
+}
+
+model Payment {
+  id             Int           @id @default(autoincrement())
+  appointmentId  Int           @unique
+  userId         Int
+
+  amount         Float
+  currency       String        @default("GBP")
+
+  status         PaymentStatus @default(PENDING)
+
+  // External processor (Stripe)
+  provider       String        // "stripe"
+  providerRef    String        // PaymentIntent ID
+
+  createdAt      DateTime      @default(now())
+  updatedAt      DateTime      @updatedAt
+
+  appointment Appointment @relation(fields: [appointmentId], references: [id])
+  user        User        @relation(fields: [userId], references: [id])
+
+  auditLogs   PaymentAuditLog[]
+}
+
+model PaymentAuditLog {
+  id         Int                @id @default(autoincrement())
+  paymentId  Int
+
+  action     PaymentAuditAction
+  oldStatus  PaymentStatus?
+  newStatus  PaymentStatus?
+
+  meta       Json?
+  createdAt  DateTime           @default(now())
+
+  payment Payment @relation(fields: [paymentId], references: [id])
+
+  @@index([paymentId])
+}
+
+model StripeEvent {
+  id          String   @id            // Stripe event.id
+  type        String
+  processed   Boolean  @default(false)
+  receivedAt  DateTime @default(now())
+  processedAt DateTime?
+  payload     Json
+}

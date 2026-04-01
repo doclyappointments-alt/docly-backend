@@ -1,0 +1,4 @@
+-- Neutralised snapshot migration
+-- Original file was a full schema snapshot and caused migration drift
+-- This migration intentionally left empty to preserve history order
+-- Canonical base schema is 20251112101311_init

@@ -1,0 +1,40 @@
+{
+  "compilerOptions": {
+    "target": "ES2022",
+    "module": "nodenext",
+    "moduleResolution": "nodenext",
+    "outDir": "dist",
+    "rootDir": "src",
+    "strict": true,
+    "esModuleInterop": true,
+    "allowSyntheticDefaultImports": true,
+    "forceConsistentCasingInFileNames": true,
+    "skipLibCheck": true,
+    "resolveJsonModule": true,
+    "sourceMap": true,
+    "noImplicitAny": true,
+    "noUnusedLocals": true,
+    "noUnusedParameters": true,
+    "noFallthroughCasesInSwitch": true,
+    "typeRoots": ["./src/types", "./node_modules/@types"],
+    "baseUrl": "./src",
+"paths": {
+  "@common/*": ["common/*"],
+  "@utils/*": ["common/utils/*"],
+  "@dto/*": ["common/dto/*"],
+  "@queues/*": ["common/queues/*"],
+  "@middleware/*": ["common/middleware/*"],
+  "@cron/*": ["common/cron/*"],
+  "@modules/*": ["modules/*"]
+}
+
+  },
+  "include": ["src"],
+  "exclude": [
+    "src/modules/payments",
+    "src/modules/reviews",
+    "src/modules/search",
+    "src/modules/notifications",
+    "src/modules/admin"
+  ]
+}

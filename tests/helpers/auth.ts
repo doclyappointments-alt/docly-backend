@@ -1,0 +1,86 @@
+// tests/helpers/auth.ts
+
+import { http } from "../config/http.ts";
+
+export interface TestUser {
+  id: number;
+  email: string;
+  accessToken: string;
+  role: "PATIENT" | "PROVIDER";
+}
+
+/* -------------------------------------------------------
+ * CORE AUTH HELPERS
+ * ----------------------------------------------------- */
+
+export async function registerUserWithEmail(
+  email: string,
+  password: string,
+  role: "PATIENT" | "PROVIDER"
+): Promise<TestUser> {
+  // Register
+  await http.post("/auth/register", {
+    name: `${role} Test`,
+    email,
+    password,
+    role,
+  });
+
+  // Login
+  const loginRes = await http.post("/auth/login", {
+    email,
+    password,
+  });
+
+  const data = loginRes.data || loginRes;
+  const token = data.accessToken;
+
+  if (!token) {
+    throw new Error("Login did not return accessToken");
+  }
+
+  return {
+    id: 0,
+    email,
+    accessToken: token,
+    role,
+  };
+}
+
+export async function loginUser(email: string, password: string) {
+  const res = await http.post("/auth/login", { email, password });
+  const data = res.data || res;
+
+  return {
+    accessToken: data.accessToken,
+    refreshToken: data.refreshToken,
+  };
+}
+
+export async function registerAndLogin(
+  email: string,
+  password: string,
+  role: "PATIENT" | "PROVIDER"
+) {
+  const user = await registerUserWithEmail(email, password, role);
+
+  return {
+    email: user.email,
+    token: user.accessToken,
+    role: user.role,
+  };
+}
+
+/* -------------------------------------------------------
+ * TEST USER FACTORIES
+ * ----------------------------------------------------- */
+
+export async function createTestPatient(): Promise<TestUser> {
+  const email = `patient_${Date.now()}@test.local`;
+  return registerUserWithEmail(email, "password123", "PATIENT");
+}
+
+export async function createTestProvider(): Promise<TestUser> {
+  const email = `provider_${Date.now()}@test.local`;
+  return registerUserWithEmail(email, "password123", "PROVIDER");
+}

@@ -1,0 +1,15 @@
+{
+  "patient": {
+    "email": "patient_1774368279932@test.local",
+    "token": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJ1c2VySWQiOjIsInVzZXJSb2xlIjoiUEFUSUVOVCIsImlhdCI6MTc3NDM2ODI3OSwiZXhwIjoxNzc0MzY5MTc5fQ.Np9ECwe1ZV1IPiewIeAU_C2U2zdYkOGbcBpwgFAAijQ"
+  },
+  "provider": {
+    "email": "provider_1774368279959@test.local",
+    "token": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJ1c2VySWQiOjUsInVzZXJSb2xlIjoiUFJPVklERVIiLCJpYXQiOjE3NzQzNjgyNzksImV4cCI6MTc3NDM2OTE3OX0.Vnr_p_qHmpx5xyZucu4Y1gDAYSNA_YLAltU4vKk4M0w",
+    "providerId": 2
+  },
+  "admin": {
+    "email": "admin@test.local",
+    "token": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJ1c2VySWQiOjEwLCJ1c2VyUm9sZSI6IkFETUlOIiwiaWF0IjoxNzc0MzY4Mjc5LCJleHAiOjE3NzQzNjkxNzl9.59eKB1wsDNk97oTIPa3trSDh4EgmDeO07r-B2JWOqZo"
+  }
+}
